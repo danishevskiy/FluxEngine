@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FluxEngine Dashboard</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+<header>
+  <div>
+    <h1>FluxEngine</h1>
+    <p>Моніторинг температури, теплового потоку та λeff у реальному часі</p>
+  </div>
+  <div class="status"><span id="statusDot"></span><span id="statusText">connecting</span></div>
+</header>
+
+<main>
+  <section class="cards">
+    <div class="card"><span>T1</span><strong id="vT1">—</strong><small>°C</small></div>
+    <div class="card"><span>T2</span><strong id="vT2">—</strong><small>°C</small></div>
+    <div class="card"><span>qFlux</span><strong id="vQFlux">—</strong><small>Вт/м²</small></div>
+    <div class="card"><span>λFlux</span><strong id="vLambdaFlux">—</strong><small>Вт/(м·К)</small></div>
+  </section>
+
+  <section class="panel">
+    <h2>Онлайн-графік</h2>
+    <canvas id="liveChart" height="90"></canvas>
+  </section>
+
+  <section class="panel">
+    <h2>Пошук і фільтри</h2>
+    <form id="filterForm" class="filters">
+      <label>Від <input type="datetime-local" id="from"></label>
+      <label>До <input type="datetime-local" id="to"></label>
+      <label>Device ID <input type="text" id="deviceId" placeholder="ESP32-01"></label>
+      <label>λ min <input type="number" step="0.0001" id="minLambda"></label>
+      <label>λ max <input type="number" step="0.0001" id="maxLambda"></label>
+      <label>q min <input type="number" step="0.01" id="minQ"></label>
+      <label>q max <input type="number" step="0.01" id="maxQ"></label>
+      <button type="submit">Застосувати</button>
+      <button type="button" id="resetBtn">Скинути</button>
+    </form>
+  </section>
+
+  <section class="panel grid2">
+    <div>
+      <h2>Графік за фільтром</h2>
+      <canvas id="filteredChart" height="120"></canvas>
+    </div>
+    <div>
+      <h2>Таблиця</h2>
+      <div class="tableWrap">
+        <table>
+          <thead>
+          <tr><th>Час</th><th>T1</th><th>T2</th><th>ΔT</th><th>qTEC</th><th>qFlux</th><th>λTEC</th><th>λFlux</th><th>Device</th></tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+const fmt = (v, d=2) => v == null ? '—' : Number(v).toFixed(d);
+const isoLocal = v => v ? new Date(v).toLocaleString() : '—';
+const toIsoParam = v => v ? new Date(v).toISOString().replace('Z','') : '';
+
+const liveCtx = document.getElementById('liveChart');
+const filteredCtx = document.getElementById('filteredChart');
+
+const liveChart = new Chart(liveCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    { label: 'T1, °C', data: [] }, { label: 'T2, °C', data: [] },
+    { label: 'qFlux, W/m²', data: [] }, { label: 'λFlux', data: [] }
+  ]},
+  options: { responsive: true, animation: false, scales: { y: { beginAtZero: false } } }
+});
+const filteredChart = new Chart(filteredCtx, {
+  type: 'line',
+  data: { labels: [], datasets: [
+    { label: 'qTEC, W/m²', data: [] }, { label: 'qFlux, W/m²', data: [] },
+    { label: 'λTEC', data: [] }, { label: 'λFlux', data: [] }
+  ]},
+  options: { responsive: true, animation: false }
+});
+
+function setStatus(ok) {
+  document.getElementById('statusText').innerText = ok ? 'online' : 'offline';
+  document.getElementById('statusDot').className = ok ? 'ok' : 'bad';
+}
+
+async function loadLatest() {
+  try {
+    const res = await fetch('/api/measurements/latest?limit=80');
+    const data = await res.json();
+    const ordered = data.reverse();
+    const last = ordered[ordered.length - 1];
+    if (last) {
+      vT1.innerText = fmt(last.t1); vT2.innerText = fmt(last.t2);
+      vQFlux.innerText = fmt(last.qFlux, 3); vLambdaFlux.innerText = fmt(last.lambdaFlux, 4);
+    }
+    liveChart.data.labels = ordered.map(x => new Date(x.createdAt).toLocaleTimeString());
+    liveChart.data.datasets[0].data = ordered.map(x => x.t1);
+    liveChart.data.datasets[1].data = ordered.map(x => x.t2);
+    liveChart.data.datasets[2].data = ordered.map(x => x.qFlux);
+    liveChart.data.datasets[3].data = ordered.map(x => x.lambdaFlux);
+    liveChart.update(); setStatus(true);
+  } catch (e) { setStatus(false); }
+}
+
+function buildQuery() {
+  const params = new URLSearchParams();
+  const fields = ['deviceId','minLambda','maxLambda','minQ','maxQ'];
+  if (from.value) params.set('from', toIsoParam(from.value));
+  if (to.value) params.set('to', toIsoParam(to.value));
+  fields.forEach(id => { const v = document.getElementById(id).value; if (v) params.set(id, v); });
+  params.set('size', '200');
+  return params.toString();
+}
+async function loadFiltered() {
+  const res = await fetch('/api/measurements/search?' + buildQuery());
+  const page = await res.json();
+  const rows = page.content.reverse();
+  tableBody.innerHTML = rows.map(x => `<tr>
+    <td>${isoLocal(x.createdAt)}</td><td>${fmt(x.t1)}</td><td>${fmt(x.t2)}</td><td>${fmt(x.deltaT)}</td>
+    <td>${fmt(x.qTec,3)}</td><td>${fmt(x.qFlux,3)}</td><td>${fmt(x.lambdaTec,4)}</td><td>${fmt(x.lambdaFlux,4)}</td><td>${x.deviceId ?? ''}</td>
+  </tr>`).join('');
+  filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
+  filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
+  filteredChart.data.datasets[1].data = rows.map(x => x.qFlux);
+  filteredChart.data.datasets[2].data = rows.map(x => x.lambdaTec);
+  filteredChart.data.datasets[3].data = rows.map(x => x.lambdaFlux);
+  filteredChart.update();
+}
+
+filterForm.addEventListener('submit', e => { e.preventDefault(); loadFiltered(); });
+resetBtn.addEventListener('click', () => { filterForm.reset(); loadFiltered(); });
+loadLatest(); loadFiltered(); setInterval(loadLatest, 5000);
+</script>
+</body>
+</html>
