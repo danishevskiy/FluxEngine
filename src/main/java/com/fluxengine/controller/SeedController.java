@@ -22,8 +22,8 @@ public class SeedController {
             double t2 = 5 + r.nextDouble();
             double qFlux = 12 + r.nextDouble() * 8;
             service.save(new MeasurementRequest(t1, t2, null, null, Math.abs(t2-t1),
-                    r.nextDouble(), r.nextDouble()*5, r.nextDouble(), qFlux, 0.03, null, null,
-                    "ESP32-DEMO", "seed"));
+                    r.nextDouble(), r.nextDouble()*5, r.nextDouble(), qFlux, 0.03, null, null,null
+                    , null, "ESP32-DEMO", null));
         }
         return "ok";
     }
