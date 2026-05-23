@@ -4,24 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FluxEngine Dashboard</title>
+  <link rel="icon" href="/img/fluxengine-icon.png" type="image/png">
   <link rel="stylesheet" href="/css/app.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-<header>
-  <div>
-    <h1>FluxEngine</h1>
-    <p>Моніторинг температури, теплового потоку та λeff у реальному часі</p>
-  </div>
+<header class="topbar">
+  <a class="brand" href="/dashboard">
+    <img src="/img/fluxengine-icon.png" alt="FluxEngine">
+    <div>
+      <h1>FluxEngine</h1>
+      <p>Моніторинг температури, теплового потоку та λeff у реальному часі</p>
+    </div>
+  </a>
+  <nav>
+    <a href="/dashboard">Dashboard</a>
+    <a href="/admin/settings">Admin</a>
+  </nav>
   <div class="status"><span id="statusDot"></span><span id="statusText">connecting</span></div>
 </header>
 
 <main>
   <section class="cards">
-    <div class="card"><span>T1</span><strong id="vT1">—</strong><small>°C</small></div>
-    <div class="card"><span>T2</span><strong id="vT2">—</strong><small>°C</small></div>
+    <div class="card"><span id="t1Label">T1</span><strong id="vT1">—</strong><small>°C</small></div>
+    <div class="card"><span id="t2Label">T2</span><strong id="vT2">—</strong><small>°C</small></div>
     <div class="card"><span>qFlux</span><strong id="vQFlux">—</strong><small>Вт/м²</small></div>
     <div class="card"><span>λFlux</span><strong id="vLambdaFlux">—</strong><small>Вт/(м·К)</small></div>
+  </section>
+
+  <section class="panel settingsLine">
+    <div><b>Матеріал:</b> <span id="materialName">—</span></div>
+    <div><b>δ:</b> <span id="thicknessM">—</span> м</div>
+    <div><b>kTEC:</b> <span id="kTec">—</span></div>
+    <div><b>kFlux:</b> <span id="kFlux">—</span></div>
   </section>
 
   <section class="panel">
@@ -54,7 +69,7 @@
       <div class="tableWrap">
         <table>
           <thead>
-          <tr><th>Час</th><th>T1</th><th>T2</th><th>ΔT</th><th>qTEC</th><th>qFlux</th><th>λTEC</th><th>λFlux</th><th>Device</th></tr>
+          <tr><th>Час</th><th>T1</th><th>T2</th><th>ΔT</th><th>TEC, mV</th><th>Flux, mV</th><th>qTEC</th><th>qFlux</th><th>λTEC</th><th>λFlux</th><th>Device</th></tr>
           </thead>
           <tbody id="tableBody"></tbody>
         </table>
@@ -68,10 +83,7 @@ const fmt = (v, d=2) => v == null ? '—' : Number(v).toFixed(d);
 const isoLocal = v => v ? new Date(v).toLocaleString() : '—';
 const toIsoParam = v => v ? new Date(v).toISOString().replace('Z','') : '';
 
-const liveCtx = document.getElementById('liveChart');
-const filteredCtx = document.getElementById('filteredChart');
-
-const liveChart = new Chart(liveCtx, {
+const liveChart = new Chart(document.getElementById('liveChart'), {
   type: 'line',
   data: { labels: [], datasets: [
     { label: 'T1, °C', data: [] }, { label: 'T2, °C', data: [] },
@@ -79,7 +91,7 @@ const liveChart = new Chart(liveCtx, {
   ]},
   options: { responsive: true, animation: false, scales: { y: { beginAtZero: false } } }
 });
-const filteredChart = new Chart(filteredCtx, {
+const filteredChart = new Chart(document.getElementById('filteredChart'), {
   type: 'line',
   data: { labels: [], datasets: [
     { label: 'qTEC, W/m²', data: [] }, { label: 'qFlux, W/m²', data: [] },
@@ -91,6 +103,17 @@ const filteredChart = new Chart(filteredCtx, {
 function setStatus(ok) {
   document.getElementById('statusText').innerText = ok ? 'online' : 'offline';
   document.getElementById('statusDot').className = ok ? 'ok' : 'bad';
+}
+
+async function loadSettings() {
+  const res = await fetch('/api/settings');
+  const s = await res.json();
+  materialName.innerText = s.materialName ?? '—';
+  thicknessM.innerText = fmt(s.thicknessM, 4);
+  kTec.innerText = fmt(s.KTec ?? s.kTec ?? s.ktec, 4);
+  kFlux.innerText = fmt(s.KFlux ?? s.kFlux ?? s.kflux, 4);
+  t1Label.innerText = s.t1Name ?? 'T1';
+  t2Label.innerText = s.t2Name ?? 'T2';
 }
 
 async function loadLatest() {
@@ -127,7 +150,7 @@ async function loadFiltered() {
   const rows = page.content.reverse();
   tableBody.innerHTML = rows.map(x => `<tr>
     <td>${isoLocal(x.createdAt)}</td><td>${fmt(x.t1)}</td><td>${fmt(x.t2)}</td><td>${fmt(x.deltaT)}</td>
-    <td>${fmt(x.qTec,3)}</td><td>${fmt(x.qFlux,3)}</td><td>${fmt(x.lambdaTec,4)}</td><td>${fmt(x.lambdaFlux,4)}</td><td>${x.deviceId ?? ''}</td>
+    <td>${fmt(x.tecMv,3)}</td><td>${fmt(x.fluxMv,3)}</td><td>${fmt(x.qTec,3)}</td><td>${fmt(x.qFlux,3)}</td><td>${fmt(x.lambdaTec,4)}</td><td>${fmt(x.lambdaFlux,4)}</td><td>${x.deviceId ?? ''}</td>
   </tr>`).join('');
   filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
   filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
@@ -139,7 +162,7 @@ async function loadFiltered() {
 
 filterForm.addEventListener('submit', e => { e.preventDefault(); loadFiltered(); });
 resetBtn.addEventListener('click', () => { filterForm.reset(); loadFiltered(); });
-loadLatest(); loadFiltered(); setInterval(loadLatest, 5000);
+loadSettings(); loadLatest(); loadFiltered(); setInterval(loadLatest, 5000);
 </script>
 </body>
 </html>

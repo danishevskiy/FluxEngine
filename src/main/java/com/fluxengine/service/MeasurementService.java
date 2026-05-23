@@ -2,9 +2,12 @@ package com.fluxengine.service;
 
 import com.fluxengine.dto.MeasurementRequest;
 import com.fluxengine.model.Measurement;
+import com.fluxengine.model.SystemSettings;
 import com.fluxengine.repository.MeasurementRepository;
 import jakarta.persistence.criteria.Predicate;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -15,44 +18,58 @@ import java.util.List;
 @Service
 public class MeasurementService {
     private final MeasurementRepository repository;
+    private final SettingsService settingsService;
 
-    public MeasurementService(MeasurementRepository repository) {
+    public MeasurementService(MeasurementRepository repository, SettingsService settingsService) {
         this.repository = repository;
+        this.settingsService = settingsService;
     }
 
     public Measurement save(MeasurementRequest r) {
+        SystemSettings s = settingsService.current();
         Measurement m = new Measurement();
         m.setT1(r.t1());
         m.setT2(r.t2());
         m.setT3(r.t3());
         m.setT4(r.t4());
-        m.setTecMv(r.tecMv());
-        m.setQTec(r.qTec());
-        m.setFluxMv(r.fluxMv());
-        m.setQFlux(r.qFlux());
-        m.setThicknessM(r.thicknessM() != null ? r.thicknessM() : 0.03);
-        m.setDeviceId(r.deviceId() != null ? r.deviceId() : "ESP32-01");
+
+        Double tecMv = firstNonNullObj(r.tec(), r.tecMv());
+        Double fluxMv = firstNonNullObj(r.flux(), r.fluxMv());
+        m.setTecMv(tecMv);
+        m.setFluxMv(fluxMv);
+
+        double kTec = nonNull(s.getKTec(), 4.62);
+        double kFlux = nonNull(s.getKFlux(), 13.2);
+        double thickness = r.thicknessM() != null ? r.thicknessM() : nonNull(s.getThicknessM(), 0.03);
+        m.setThicknessM(thickness);
+        m.setDeviceId(r.deviceId() != null && !r.deviceId().isBlank() ? r.deviceId() : s.getDeviceId());
         m.setNote(r.note());
+
+        Double qTec = r.qTec() != null ? r.qTec() : (tecMv != null ? Math.abs(tecMv * kTec) : null);
+        Double qFlux = r.qFlux() != null ? r.qFlux() : (fluxMv != null ? Math.abs(fluxMv * kFlux) : null);
+        m.setQTec(qTec);
+        m.setQFlux(qFlux);
 
         double tWarm = firstNonNull(r.t2(), r.t3(), 0.0);
         double tCold = firstNonNull(r.t1(), r.t4(), 0.0);
         double deltaT = r.deltaT() != null ? r.deltaT() : Math.abs(tWarm - tCold);
         m.setDeltaT(deltaT);
 
-        double thickness = m.getThicknessM();
         if (r.lambdaTec() != null) {
             m.setLambdaTec(r.lambdaTec());
-        } else if (r.qTec() != null && deltaT > 0.1) {
-            m.setLambdaTec(Math.abs(r.qTec()) * thickness / deltaT);
+        } else if (qTec != null && deltaT > 0.1) {
+            m.setLambdaTec(Math.abs(qTec) * thickness / deltaT);
         }
         if (r.lambdaFlux() != null) {
             m.setLambdaFlux(r.lambdaFlux());
-        } else if (r.qFlux() != null && deltaT > 0.1) {
-            m.setLambdaFlux(Math.abs(r.qFlux()) * thickness / deltaT);
+        } else if (qFlux != null && deltaT > 0.1) {
+            m.setLambdaFlux(Math.abs(qFlux) * thickness / deltaT);
         }
         return repository.save(m);
     }
 
+    private double nonNull(Double v, double fallback) { return v != null ? v : fallback; }
+    private Double firstNonNullObj(Double a, Double b) { return a != null ? a : b; }
     private double firstNonNull(Double a, Double b, double fallback) {
         if (a != null) return a;
         if (b != null) return b;
@@ -86,5 +103,9 @@ public class MeasurementService {
 
     public List<Measurement> latest(int limit) {
         return repository.findAll(PageRequest.of(0, Math.min(Math.max(limit, 1), 500), Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
+    }
+
+    public List<Measurement> all(int limit) {
+        return latest(limit);
     }
 }

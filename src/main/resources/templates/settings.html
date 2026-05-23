@@ -1,21 +1,45 @@
-<form method="post" action="/admin/settings">
-    <label>Material name</label>
-    <input name="materialName" th:value="${settings.materialName}">
-
-    <label>TEC coefficient, W/m² per mV</label>
-    <input type="number" step="0.0001" name="kTec" th:value="${settings.kTec}">
-
-    <label>Flux sensor coefficient, W/m² per mV</label>
-    <input type="number" step="0.0001" name="kFlux" th:value="${settings.kFlux}">
-
-    <label>Thickness, m</label>
-    <input type="number" step="0.0001" name="thicknessM" th:value="${settings.thicknessM}">
-
-    <label>Lambda source</label>
-    <select name="lambdaSource" th:value="${settings.lambdaSource}">
-        <option value="TEC">TEC</option>
-        <option value="FLUX">Flux sensor</option>
-    </select>
-
-    <button type="submit">Save settings</button>
-</form>
+<!doctype html>
+<html lang="uk" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FluxEngine Admin</title>
+  <link rel="icon" href="/img/fluxengine-icon.png" type="image/png">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/dashboard">
+    <img src="/img/fluxengine-icon.png" alt="FluxEngine">
+    <div><h1>FluxEngine Admin</h1><p>Налаштування коефіцієнтів, товщини та назв каналів</p></div>
+  </a>
+  <nav><a href="/dashboard">Dashboard</a><a href="/admin/settings">Admin</a></nav>
+</header>
+<main>
+  <section class="panel">
+    <h2>Параметри експерименту</h2>
+    <p class="hint">ESP32 передає сирі значення: <code>t1</code>, <code>t2</code>, <code>tec</code>, <code>flux</code>. Сервер рахує q та λ за цими налаштуваннями.</p>
+    <form method="post" action="/admin/settings" class="adminForm" th:object="${settings}">
+      <input type="hidden" th:field="*{id}">
+      <label>Назва матеріалу <input th:field="*{materialName}" required></label>
+      <label>Device ID за замовчуванням <input th:field="*{deviceId}" required></label>
+      <label>Товщина δ, м <input type="number" step="0.0001" min="0.001" th:field="*{thicknessM}" required></label>
+      <label>kTEC, Вт/м² на мВ <input type="number" step="0.0001" th:field="*{KTec}" required></label>
+      <label>kFlux, Вт/м² на мВ <input type="number" step="0.0001" th:field="*{KFlux}" required></label>
+      <label>Джерело λ для основного аналізу
+        <select th:field="*{lambdaSource}">
+          <option value="TEC">TEC</option>
+          <option value="FLUX">Flux sensor</option>
+        </select>
+      </label>
+      <label>Назва T1 <input th:field="*{t1Name}"></label>
+      <label>Назва T2 <input th:field="*{t2Name}"></label>
+      <label>Назва TEC <input th:field="*{tecName}"></label>
+      <label>Назва Flux <input th:field="*{fluxName}"></label>
+      <button type="submit">Зберегти</button>
+      <a class="btnSecondary" href="/dashboard">Повернутись до Dashboard</a>
+    </form>
+  </section>
+</main>
+</body>
+</html>

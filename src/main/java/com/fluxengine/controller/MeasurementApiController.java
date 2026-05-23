@@ -28,6 +28,11 @@ public class MeasurementApiController {
                 .body(MeasurementResponse.from(saved));
     }
 
+    @GetMapping
+    public List<MeasurementResponse> all(@RequestParam(defaultValue = "100") int limit) {
+        return service.all(limit).stream().map(MeasurementResponse::from).toList();
+    }
+
     @GetMapping("/latest")
     public List<MeasurementResponse> latest(@RequestParam(defaultValue = "100") int limit) {
         return service.latest(limit).stream().map(MeasurementResponse::from).toList();

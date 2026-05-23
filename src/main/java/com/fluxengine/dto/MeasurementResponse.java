@@ -1,6 +1,7 @@
 package com.fluxengine.dto;
 
 import com.fluxengine.model.Measurement;
+
 import java.time.LocalDateTime;
 
 public record MeasurementResponse(
