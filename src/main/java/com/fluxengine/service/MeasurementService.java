@@ -10,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import com.fluxengine.dto.UniversalMeasurementRequest;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -68,6 +69,44 @@ public class MeasurementService {
         return repository.save(m);
     }
 
+    public Measurement saveUniversal(UniversalMeasurementRequest request) {
+        double t1 = request.temperatures() != null && request.temperatures().size() > 0
+                ? request.temperatures().get(0).value()
+                : 0.0;
+
+        double t2 = request.temperatures() != null && request.temperatures().size() > 1
+                ? request.temperatures().get(1).value()
+                : 0.0;
+
+        double tec = request.flux() != null && request.flux().size() > 0
+                ? request.flux().get(0).mv()
+                : 0.0;
+
+        double flux = request.flux() != null && request.flux().size() > 1
+                ? request.flux().get(1).mv()
+                : 0.0;
+
+        MeasurementRequest mapped = new MeasurementRequest(
+                t1,
+                t2,
+                null,
+                null,
+                Math.abs(t2 - t1),
+                tec,
+                flux,
+                tec,
+                null,
+                flux,
+                null,
+                null,
+                null,
+                null,
+                request.deviceId(),
+                "universal-protocol"
+        );
+
+        return save(mapped);
+    }
     private double nonNull(Double v, double fallback) { return v != null ? v : fallback; }
     private Double firstNonNullObj(Double a, Double b) { return a != null ? a : b; }
     private double firstNonNull(Double a, Double b, double fallback) {

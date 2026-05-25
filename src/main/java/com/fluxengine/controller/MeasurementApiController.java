@@ -1,14 +1,13 @@
 package com.fluxengine.controller;
 
-import com.fluxengine.dto.MeasurementRequest;
 import com.fluxengine.dto.MeasurementResponse;
 import com.fluxengine.model.Measurement;
 import com.fluxengine.service.MeasurementService;
-import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import com.fluxengine.dto.UniversalMeasurementRequest;
 
 import java.net.URI;
 import java.time.LocalDateTime;
@@ -21,9 +20,10 @@ public class MeasurementApiController {
 
     public MeasurementApiController(MeasurementService service) { this.service = service; }
 
+
     @PostMapping
-    public ResponseEntity<MeasurementResponse> create(@Valid @RequestBody MeasurementRequest request) {
-        Measurement saved = service.save(request);
+    public ResponseEntity<MeasurementResponse> create(@RequestBody UniversalMeasurementRequest request) {
+        Measurement saved = service.saveUniversal(request);
         return ResponseEntity.created(URI.create("/api/measurements/" + saved.getId()))
                 .body(MeasurementResponse.from(saved));
     }
