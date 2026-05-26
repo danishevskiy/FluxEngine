@@ -11,23 +11,30 @@
 <body>
 <header class="topbar">
   <a class="brand" href="/dashboard">
-    <img src="/img/fluxengine-icon.png" alt="FluxEngine">
+    <img src="/img/fluxengine-icon.png" class="brand-logo" alt="FluxEngine">
     <div>
       <h1>FluxEngine</h1>
       <p>Моніторинг температури, теплового потоку та λeff у реальному часі</p>
     </div>
   </a>
-  <nav>
-    <a href="/dashboard">Dashboard</a>
-    <a href="/admin/settings">Admin</a>
+
+  <nav class="nav-buttons">
+    <a href="/dashboard" class="nav-btn">Dashboard</a>
+    <a href="/admin/settings" class="nav-btn primary">Admin</a>
   </nav>
-  <div class="status"><span id="statusDot"></span><span id="statusText">connecting</span></div>
+
+  <div class="status">
+    <span id="statusDot"></span>
+    <span id="statusText">connecting</span>
+  </div>
 </header>
 
 <main>
   <section class="cards">
     <div class="card"><span id="t1Label">T1</span><strong id="vT1">—</strong><small>°C</small></div>
     <div class="card"><span id="t2Label">T2</span><strong id="vT2">—</strong><small>°C</small></div>
+    <div class="card"><span>qTEC</span><strong id="vQTec">—</strong><small>Вт/м²</small></div>
+    <div class="card"><span>λTEC</span><strong id="vLambdaTec">—</strong><small>Вт/(м·К)</small></div>
     <div class="card"><span>qFlux</span><strong id="vQFlux">—</strong><small>Вт/м²</small></div>
     <div class="card"><span>λFlux</span><strong id="vLambdaFlux">—</strong><small>Вт/(м·К)</small></div>
   </section>
@@ -69,7 +76,12 @@
       <div class="tableWrap">
         <table>
           <thead>
-          <tr><th>Час</th><th>T1</th><th>T2</th><th>ΔT</th><th>TEC, mV</th><th>Flux, mV</th><th>qTEC</th><th>qFlux</th><th>λTEC</th><th>λFlux</th><th>Device</th></tr>
+          <tr>
+            <th>Час</th><th>T1</th><th>T2</th><th>ΔT</th>
+            <th>TEC, mV</th><th>Flux, mV</th>
+            <th>qTEC</th><th>qFlux</th>
+            <th>λTEC</th><th>λFlux</th><th>Device</th>
+          </tr>
           </thead>
           <tbody id="tableBody"></tbody>
         </table>
@@ -79,90 +91,153 @@
 </main>
 
 <script>
-const fmt = (v, d=2) => v == null ? '—' : Number(v).toFixed(d);
-const isoLocal = v => v ? new Date(v).toLocaleString() : '—';
-const toIsoParam = v => v ? new Date(v).toISOString().replace('Z','') : '';
+  const fmt = (v, d=2) => v == null ? '—' : Number(v).toFixed(d);
+  const isoLocal = v => v ? new Date(v).toLocaleString() : '—';
+  const toIsoParam = v => v ? new Date(v).toISOString().replace('Z','') : '';
 
-const liveChart = new Chart(document.getElementById('liveChart'), {
-  type: 'line',
-  data: { labels: [], datasets: [
-    { label: 'T1, °C', data: [] }, { label: 'T2, °C', data: [] },
-    { label: 'qFlux, W/m²', data: [] }, { label: 'λFlux', data: [] }
-  ]},
-  options: { responsive: true, animation: false, scales: { y: { beginAtZero: false } } }
-});
-const filteredChart = new Chart(document.getElementById('filteredChart'), {
-  type: 'line',
-  data: { labels: [], datasets: [
-    { label: 'qTEC, W/m²', data: [] }, { label: 'qFlux, W/m²', data: [] },
-    { label: 'λTEC', data: [] }, { label: 'λFlux', data: [] }
-  ]},
-  options: { responsive: true, animation: false }
-});
-
-function setStatus(ok) {
-  document.getElementById('statusText').innerText = ok ? 'online' : 'offline';
-  document.getElementById('statusDot').className = ok ? 'ok' : 'bad';
-}
-
-async function loadSettings() {
-  const res = await fetch('/api/settings');
-  const s = await res.json();
-  materialName.innerText = s.materialName ?? '—';
-  thicknessM.innerText = fmt(s.thicknessM, 4);
-  kTec.innerText = fmt(s.KTec ?? s.kTec ?? s.ktec, 4);
-  kFlux.innerText = fmt(s.KFlux ?? s.kFlux ?? s.kflux, 4);
-  t1Label.innerText = s.t1Name ?? 'T1';
-  t2Label.innerText = s.t2Name ?? 'T2';
-}
-
-async function loadLatest() {
-  try {
-    const res = await fetch('/api/measurements/latest?limit=80');
-    const data = await res.json();
-    const ordered = data.reverse();
-    const last = ordered[ordered.length - 1];
-    if (last) {
-      vT1.innerText = fmt(last.t1); vT2.innerText = fmt(last.t2);
-      vQFlux.innerText = fmt(last.qFlux, 3); vLambdaFlux.innerText = fmt(last.lambdaFlux, 4);
+  const liveChart = new Chart(document.getElementById('liveChart'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'T1, °C', data: [] },
+        { label: 'T2, °C', data: [] },
+        { label: 'qTEC, W/m²', data: [] },
+        { label: 'qFlux, W/m²', data: [] },
+        { label: 'λTEC', data: [] },
+        { label: 'λFlux', data: [] }
+      ]
+    },
+    options: {
+      responsive: true,
+      animation: false,
+      scales: { y: { beginAtZero: false } }
     }
-    liveChart.data.labels = ordered.map(x => new Date(x.createdAt).toLocaleTimeString());
-    liveChart.data.datasets[0].data = ordered.map(x => x.t1);
-    liveChart.data.datasets[1].data = ordered.map(x => x.t2);
-    liveChart.data.datasets[2].data = ordered.map(x => x.qFlux);
-    liveChart.data.datasets[3].data = ordered.map(x => x.lambdaFlux);
-    liveChart.update(); setStatus(true);
-  } catch (e) { setStatus(false); }
-}
+  });
 
-function buildQuery() {
-  const params = new URLSearchParams();
-  const fields = ['deviceId','minLambda','maxLambda','minQ','maxQ'];
-  if (from.value) params.set('from', toIsoParam(from.value));
-  if (to.value) params.set('to', toIsoParam(to.value));
-  fields.forEach(id => { const v = document.getElementById(id).value; if (v) params.set(id, v); });
-  params.set('size', '200');
-  return params.toString();
-}
-async function loadFiltered() {
-  const res = await fetch('/api/measurements/search?' + buildQuery());
-  const page = await res.json();
-  const rows = page.content.reverse();
-  tableBody.innerHTML = rows.map(x => `<tr>
-    <td>${isoLocal(x.createdAt)}</td><td>${fmt(x.t1)}</td><td>${fmt(x.t2)}</td><td>${fmt(x.deltaT)}</td>
-    <td>${fmt(x.tecMv,3)}</td><td>${fmt(x.fluxMv,3)}</td><td>${fmt(x.qTec,3)}</td><td>${fmt(x.qFlux,3)}</td><td>${fmt(x.lambdaTec,4)}</td><td>${fmt(x.lambdaFlux,4)}</td><td>${x.deviceId ?? ''}</td>
+  const filteredChart = new Chart(document.getElementById('filteredChart'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label: 'qTEC, W/m²', data: [] },
+        { label: 'qFlux, W/m²', data: [] },
+        { label: 'λTEC', data: [] },
+        { label: 'λFlux', data: [] }
+      ]
+    },
+    options: { responsive: true, animation: false }
+  });
+
+  function setStatus(ok) {
+    document.getElementById('statusText').innerText = ok ? 'online' : 'offline';
+    document.getElementById('statusDot').className = ok ? 'ok' : 'bad';
+  }
+
+  async function loadSettings() {
+    const res = await fetch('/api/settings');
+    const s = await res.json();
+
+    materialName.innerText = s.materialName ?? '—';
+    thicknessM.innerText = fmt(s.thicknessM, 4);
+    kTec.innerText = fmt(s.KTec ?? s.kTec ?? s.ktec, 4);
+    kFlux.innerText = fmt(s.KFlux ?? s.kFlux ?? s.kflux, 4);
+
+    t1Label.innerText = s.t1Name ?? 'T1';
+    t2Label.innerText = s.t2Name ?? 'T2';
+  }
+
+  async function loadLatest() {
+    try {
+      const res = await fetch('/api/measurements/latest?limit=80');
+      const data = await res.json();
+
+      const ordered = data.reverse();
+      const last = ordered[ordered.length - 1];
+
+      if (last) {
+        vT1.innerText = fmt(last.t1);
+        vT2.innerText = fmt(last.t2);
+        vQTec.innerText = fmt(last.qTec, 3);
+        vLambdaTec.innerText = fmt(last.lambdaTec, 4);
+        vQFlux.innerText = fmt(last.qFlux, 3);
+        vLambdaFlux.innerText = fmt(last.lambdaFlux, 4);
+      }
+
+      liveChart.data.labels = ordered.map(x => new Date(x.createdAt).toLocaleTimeString());
+      liveChart.data.datasets[0].data = ordered.map(x => x.t1);
+      liveChart.data.datasets[1].data = ordered.map(x => x.t2);
+      liveChart.data.datasets[2].data = ordered.map(x => x.qTec);
+      liveChart.data.datasets[3].data = ordered.map(x => x.qFlux);
+      liveChart.data.datasets[4].data = ordered.map(x => x.lambdaTec);
+      liveChart.data.datasets[5].data = ordered.map(x => x.lambdaFlux);
+
+      liveChart.update();
+      setStatus(true);
+    } catch (e) {
+      setStatus(false);
+    }
+  }
+
+  function buildQuery() {
+    const params = new URLSearchParams();
+    const fields = ['deviceId','minLambda','maxLambda','minQ','maxQ'];
+
+    if (from.value) params.set('from', toIsoParam(from.value));
+    if (to.value) params.set('to', toIsoParam(to.value));
+
+    fields.forEach(id => {
+      const v = document.getElementById(id).value;
+      if (v) params.set(id, v);
+    });
+
+    params.set('size', '200');
+    return params.toString();
+  }
+
+  async function loadFiltered() {
+    const res = await fetch('/api/measurements/search?' + buildQuery());
+    const page = await res.json();
+    const rows = page.content.reverse();
+
+    tableBody.innerHTML = rows.map(x => `<tr>
+    <td>${isoLocal(x.createdAt)}</td>
+    <td>${fmt(x.t1)}</td>
+    <td>${fmt(x.t2)}</td>
+    <td>${fmt(x.deltaT)}</td>
+    <td>${fmt(x.tecMv,3)}</td>
+    <td>${fmt(x.fluxMv,3)}</td>
+    <td>${fmt(x.qTec,3)}</td>
+    <td>${fmt(x.qFlux,3)}</td>
+    <td>${fmt(x.lambdaTec,4)}</td>
+    <td>${fmt(x.lambdaFlux,4)}</td>
+    <td>${x.deviceId ?? ''}</td>
   </tr>`).join('');
-  filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
-  filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
-  filteredChart.data.datasets[1].data = rows.map(x => x.qFlux);
-  filteredChart.data.datasets[2].data = rows.map(x => x.lambdaTec);
-  filteredChart.data.datasets[3].data = rows.map(x => x.lambdaFlux);
-  filteredChart.update();
-}
 
-filterForm.addEventListener('submit', e => { e.preventDefault(); loadFiltered(); });
-resetBtn.addEventListener('click', () => { filterForm.reset(); loadFiltered(); });
-loadSettings(); loadLatest(); loadFiltered(); setInterval(loadLatest, 5000);
+    filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
+    filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
+    filteredChart.data.datasets[1].data = rows.map(x => x.qFlux);
+    filteredChart.data.datasets[2].data = rows.map(x => x.lambdaTec);
+    filteredChart.data.datasets[3].data = rows.map(x => x.lambdaFlux);
+
+    filteredChart.update();
+  }
+
+  filterForm.addEventListener('submit', e => {
+    e.preventDefault();
+    loadFiltered();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    filterForm.reset();
+    loadFiltered();
+  });
+
+  loadSettings();
+  loadLatest();
+  loadFiltered();
+
+  setInterval(loadLatest, 5000);
 </script>
 </body>
 </html>
