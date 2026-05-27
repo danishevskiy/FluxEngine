@@ -66,6 +66,37 @@
     </form>
   </section>
 
+  <section class="panel summary-panel">
+    <h2>Підсумок за вибраний період</h2>
+
+    <div class="summary-grid">
+      <div>
+        <span>Матеріал</span>
+        <strong id="summaryMaterial">—</strong>
+      </div>
+
+      <div>
+        <span>Товщина δ</span>
+        <strong id="summaryThickness">—</strong>
+      </div>
+
+      <div>
+        <span>Середня λTEC</span>
+        <strong id="avgLambdaTec">—</strong>
+      </div>
+
+      <div>
+        <span>Середня λFlux</span>
+        <strong id="avgLambdaFlux">—</strong>
+      </div>
+
+      <div>
+        <span>Кількість точок</span>
+        <strong id="summaryCount">—</strong>
+      </div>
+    </div>
+  </section>
+
   <section class="panel grid2">
     <div>
       <h2>Графік за фільтром</h2>
@@ -91,7 +122,7 @@
 </main>
 
 <script>
-  const fmt = (v, d=2) => v == null ? '—' : Number(v).toFixed(d);
+  const fmt = (v, d=2) => v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(d);
   const isoLocal = v => v ? new Date(v).toLocaleString() : '—';
   const toIsoParam = v => v ? new Date(v).toISOString().replace('Z','') : '';
 
@@ -138,13 +169,19 @@
     const res = await fetch('/api/settings');
     const s = await res.json();
 
-    materialName.innerText = s.materialName ?? '—';
-    thicknessM.innerText = fmt(s.thicknessM, 4);
+    const currentMaterial = s.materialName ?? '—';
+    const currentThickness = s.thicknessM ? Number(s.thicknessM).toFixed(4) : '—';
+
+    materialName.innerText = currentMaterial;
+    thicknessM.innerText = currentThickness;
     kTec.innerText = fmt(s.KTec ?? s.kTec ?? s.ktec, 4);
     kFlux.innerText = fmt(s.KFlux ?? s.kFlux ?? s.kflux, 4);
 
     t1Label.innerText = s.t1Name ?? 'T1';
     t2Label.innerText = s.t2Name ?? 'T2';
+
+    summaryMaterial.innerText = currentMaterial;
+    summaryThickness.innerText = currentThickness === '—' ? '—' : currentThickness + ' м';
   }
 
   async function loadLatest() {
@@ -195,24 +232,45 @@
     return params.toString();
   }
 
+  function calculateAverage(values) {
+    const valid = values
+            .filter(v => v !== null && v !== undefined && !Number.isNaN(Number(v)))
+            .map(Number);
+
+    if (valid.length === 0) return null;
+
+    return valid.reduce((a, b) => a + b, 0) / valid.length;
+  }
+
+  function updateSummary(rows) {
+    const avgTec = calculateAverage(rows.map(x => x.lambdaTec));
+    const avgFlux = calculateAverage(rows.map(x => x.lambdaFlux));
+
+    avgLambdaTec.innerText = avgTec === null ? '—' : avgTec.toFixed(5) + ' Вт/(м·К)';
+    avgLambdaFlux.innerText = avgFlux === null ? '—' : avgFlux.toFixed(5) + ' Вт/(м·К)';
+    summaryCount.innerText = rows.length;
+  }
+
   async function loadFiltered() {
     const res = await fetch('/api/measurements/search?' + buildQuery());
     const page = await res.json();
     const rows = page.content.reverse();
 
+    updateSummary(rows);
+
     tableBody.innerHTML = rows.map(x => `<tr>
-    <td>${isoLocal(x.createdAt)}</td>
-    <td>${fmt(x.t1)}</td>
-    <td>${fmt(x.t2)}</td>
-    <td>${fmt(x.deltaT)}</td>
-    <td>${fmt(x.tecMv,3)}</td>
-    <td>${fmt(x.fluxMv,3)}</td>
-    <td>${fmt(x.qTec,3)}</td>
-    <td>${fmt(x.qFlux,3)}</td>
-    <td>${fmt(x.lambdaTec,4)}</td>
-    <td>${fmt(x.lambdaFlux,4)}</td>
-    <td>${x.deviceId ?? ''}</td>
-  </tr>`).join('');
+      <td>${isoLocal(x.createdAt)}</td>
+      <td>${fmt(x.t1)}</td>
+      <td>${fmt(x.t2)}</td>
+      <td>${fmt(x.deltaT)}</td>
+      <td>${fmt(x.tecMv,3)}</td>
+      <td>${fmt(x.fluxMv,3)}</td>
+      <td>${fmt(x.qTec,3)}</td>
+      <td>${fmt(x.qFlux,3)}</td>
+      <td>${fmt(x.lambdaTec,4)}</td>
+      <td>${fmt(x.lambdaFlux,4)}</td>
+      <td>${x.deviceId ?? ''}</td>
+    </tr>`).join('');
 
     filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
     filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
