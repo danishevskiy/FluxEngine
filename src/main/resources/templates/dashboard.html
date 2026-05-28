@@ -173,13 +173,13 @@
 
   const liveChart = new Chart(document.getElementById('liveChart'), {
     type: 'line',
-    data: { labels: [], datasets: [dataset('T1, °C'), dataset('T2, °C'), dataset('qTEC, Вт/м²'), dataset('qFlux, Вт/м²'), dataset('λTEC'), dataset('λFlux')] },
+    data: { labels: [], datasets: [dataset('T1, °C'), dataset('T2, °C'), dataset('qTEC, Вт/м²'), dataset('qFlux, Вт/м²'), dataset('λTEC, Вт/(м·К)'), dataset('λFlux, Вт/(м·К)')] },
     options: chartOptions(false)
   });
 
   const filteredChart = new Chart(document.getElementById('filteredChart'), {
     type: 'line',
-    data: { labels: [], datasets: [dataset('qTEC, Вт/м²'), dataset('qFlux, Вт/м²'), dataset('λTEC'), dataset('λFlux')] },
+    data: { labels: [], datasets: [dataset('T1, °C'),dataset('T2, °C'),dataset('qTEC, Вт/м²'), dataset('qFlux, Вт/м²'), dataset('λTEC, Вт/(м·К)'), dataset('λFlux, Вт/(м·К)')] },
     options: chartOptions(false)
   });
 
@@ -286,10 +286,13 @@
     </tr>`).join('');
 
     filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
-    filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
-    filteredChart.data.datasets[1].data = rows.map(x => x.qFlux);
-    filteredChart.data.datasets[2].data = rows.map(x => x.lambdaTec);
-    filteredChart.data.datasets[3].data = rows.map(x => x.lambdaFlux);
+
+    filteredChart.data.datasets[0].data = rows.map(x => x.t1);
+    filteredChart.data.datasets[1].data = rows.map(x => x.t2);
+    filteredChart.data.datasets[2].data = rows.map(x => x.qTec);
+    filteredChart.data.datasets[3].data = rows.map(x => x.qFlux);
+    filteredChart.data.datasets[4].data = rows.map(x => x.lambdaTec);
+    filteredChart.data.datasets[5].data = rows.map(x => x.lambdaFlux);
     filteredChart.update();
     updateSummary(rows);
   }
