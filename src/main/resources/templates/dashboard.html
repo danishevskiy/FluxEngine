@@ -4,10 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FluxEngine Dashboard</title>
+
   <link rel="icon" href="/img/fluxengine-icon.png" type="image/png">
   <link rel="stylesheet" href="/css/app.css">
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 </head>
+
 <body>
 <header class="topbar">
   <a class="brand" href="/dashboard">
@@ -48,11 +53,28 @@
 
   <section class="panel">
     <h2>Онлайн-графік</h2>
+    <p class="hint">
+      Натискайте на назви серій у легенді графіка, щоб приховати або повернути окремі криві.
+    </p>
+
+    <div class="export-actions">
+      <button type="button" id="exportLiveJpegBtn">Live графік JPEG</button>
+      <button type="button" id="exportLivePdfBtn">Live графік PDF</button>
+    </div>
+
     <canvas id="liveChart" height="90"></canvas>
   </section>
 
   <section class="panel">
     <h2>Пошук і фільтри</h2>
+
+    <div class="filter-help">
+      <b>Як працює фільтр:</b>
+      оберіть період вимірювань, Device ID, діапазон λ або q.
+      Після натискання «Застосувати» таблиця та нижній графік будуть перебудовані лише за знайденими даними.
+      Верхній графік показує останні онлайн-значення незалежно від фільтра.
+    </div>
+
     <form id="filterForm" class="filters">
       <label>Від <input type="datetime-local" id="from"></label>
       <label>До <input type="datetime-local" id="to"></label>
@@ -66,52 +88,43 @@
     </form>
   </section>
 
-  <section class="panel summary-panel">
-    <h2>Підсумок за вибраний період</h2>
-
-    <div class="summary-grid">
-      <div>
-        <span>Матеріал</span>
-        <strong id="summaryMaterial">—</strong>
-      </div>
-
-      <div>
-        <span>Товщина δ</span>
-        <strong id="summaryThickness">—</strong>
-      </div>
-
-      <div>
-        <span>Середня λTEC</span>
-        <strong id="avgLambdaTec">—</strong>
-      </div>
-
-      <div>
-        <span>Середня λFlux</span>
-        <strong id="avgLambdaFlux">—</strong>
-      </div>
-
-      <div>
-        <span>Кількість точок</span>
-        <strong id="summaryCount">—</strong>
-      </div>
-    </div>
-  </section>
-
   <section class="panel grid2">
     <div>
       <h2>Графік за фільтром</h2>
+      <p class="hint">
+        Серії можна приховувати або повертати натисканням на легенду.
+      </p>
+
+      <div class="export-actions">
+        <button type="button" id="exportFilteredJpegBtn">Фільтр-графік JPEG</button>
+        <button type="button" id="exportFilteredPdfBtn">Фільтр-графік PDF</button>
+      </div>
+
       <canvas id="filteredChart" height="120"></canvas>
     </div>
+
     <div>
       <h2>Таблиця</h2>
+
+      <div class="export-actions">
+        <button type="button" id="exportExcelBtn">Експорт таблиці Excel</button>
+      </div>
+
       <div class="tableWrap">
-        <table>
+        <table id="dataTable">
           <thead>
           <tr>
-            <th>Час</th><th>T1</th><th>T2</th><th>ΔT</th>
-            <th>TEC, mV</th><th>Flux, mV</th>
-            <th>qTEC</th><th>qFlux</th>
-            <th>λTEC</th><th>λFlux</th><th>Device</th>
+            <th>Час</th>
+            <th>T1</th>
+            <th>T2</th>
+            <th>ΔT</th>
+            <th>TEC, mV</th>
+            <th>Flux, mV</th>
+            <th>qTEC</th>
+            <th>qFlux</th>
+            <th>λTEC</th>
+            <th>λFlux</th>
+            <th>Device</th>
           </tr>
           </thead>
           <tbody id="tableBody"></tbody>
@@ -122,27 +135,51 @@
 </main>
 
 <script>
-  const fmt = (v, d=2) => v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(d);
+  const fmt = (v, d = 2) => v == null ? '—' : Number(v).toFixed(d);
   const isoLocal = v => v ? new Date(v).toLocaleString() : '—';
   const toIsoParam = v => v ? new Date(v).toISOString().replace('Z','') : '';
+
+  function dataset(label) {
+    return {
+      label,
+      data: [],
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      pointBackgroundColor: '#ffffff',
+      pointBorderWidth: 2,
+      tension: 0.25
+    };
+  }
 
   const liveChart = new Chart(document.getElementById('liveChart'), {
     type: 'line',
     data: {
       labels: [],
       datasets: [
-        { label: 'T1, °C', data: [] },
-        { label: 'T2, °C', data: [] },
-        { label: 'qTEC, W/m²', data: [] },
-        { label: 'qFlux, W/m²', data: [] },
-        { label: 'λTEC', data: [] },
-        { label: 'λFlux', data: [] }
+        dataset('T1, °C'),
+        dataset('T2, °C'),
+        dataset('qTEC, W/m²'),
+        dataset('qFlux, W/m²'),
+        dataset('λTEC'),
+        dataset('λFlux')
       ]
     },
     options: {
       responsive: true,
       animation: false,
-      scales: { y: { beginAtZero: false } }
+      plugins: {
+        legend: {
+          onClick: (e, legendItem, legend) => {
+            const index = legendItem.datasetIndex;
+            const chart = legend.chart;
+            chart.setDatasetVisibility(index, !chart.isDatasetVisible(index));
+            chart.update();
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: false }
+      }
     }
   });
 
@@ -151,13 +188,26 @@
     data: {
       labels: [],
       datasets: [
-        { label: 'qTEC, W/m²', data: [] },
-        { label: 'qFlux, W/m²', data: [] },
-        { label: 'λTEC', data: [] },
-        { label: 'λFlux', data: [] }
+        dataset('qTEC, W/m²'),
+        dataset('qFlux, W/m²'),
+        dataset('λTEC'),
+        dataset('λFlux')
       ]
     },
-    options: { responsive: true, animation: false }
+    options: {
+      responsive: true,
+      animation: false,
+      plugins: {
+        legend: {
+          onClick: (e, legendItem, legend) => {
+            const index = legendItem.datasetIndex;
+            const chart = legend.chart;
+            chart.setDatasetVisibility(index, !chart.isDatasetVisible(index));
+            chart.update();
+          }
+        }
+      }
+    }
   });
 
   function setStatus(ok) {
@@ -169,19 +219,13 @@
     const res = await fetch('/api/settings');
     const s = await res.json();
 
-    const currentMaterial = s.materialName ?? '—';
-    const currentThickness = s.thicknessM ? Number(s.thicknessM).toFixed(4) : '—';
-
-    materialName.innerText = currentMaterial;
-    thicknessM.innerText = currentThickness;
+    materialName.innerText = s.materialName ?? '—';
+    thicknessM.innerText = fmt(s.thicknessM, 4);
     kTec.innerText = fmt(s.KTec ?? s.kTec ?? s.ktec, 4);
     kFlux.innerText = fmt(s.KFlux ?? s.kFlux ?? s.kflux, 4);
 
     t1Label.innerText = s.t1Name ?? 'T1';
     t2Label.innerText = s.t2Name ?? 'T2';
-
-    summaryMaterial.innerText = currentMaterial;
-    summaryThickness.innerText = currentThickness === '—' ? '—' : currentThickness + ' м';
   }
 
   async function loadLatest() {
@@ -232,45 +276,24 @@
     return params.toString();
   }
 
-  function calculateAverage(values) {
-    const valid = values
-            .filter(v => v !== null && v !== undefined && !Number.isNaN(Number(v)))
-            .map(Number);
-
-    if (valid.length === 0) return null;
-
-    return valid.reduce((a, b) => a + b, 0) / valid.length;
-  }
-
-  function updateSummary(rows) {
-    const avgTec = calculateAverage(rows.map(x => x.lambdaTec));
-    const avgFlux = calculateAverage(rows.map(x => x.lambdaFlux));
-
-    avgLambdaTec.innerText = avgTec === null ? '—' : avgTec.toFixed(5) + ' Вт/(м·К)';
-    avgLambdaFlux.innerText = avgFlux === null ? '—' : avgFlux.toFixed(5) + ' Вт/(м·К)';
-    summaryCount.innerText = rows.length;
-  }
-
   async function loadFiltered() {
     const res = await fetch('/api/measurements/search?' + buildQuery());
     const page = await res.json();
     const rows = page.content.reverse();
 
-    updateSummary(rows);
-
     tableBody.innerHTML = rows.map(x => `<tr>
-      <td>${isoLocal(x.createdAt)}</td>
-      <td>${fmt(x.t1)}</td>
-      <td>${fmt(x.t2)}</td>
-      <td>${fmt(x.deltaT)}</td>
-      <td>${fmt(x.tecMv,3)}</td>
-      <td>${fmt(x.fluxMv,3)}</td>
-      <td>${fmt(x.qTec,3)}</td>
-      <td>${fmt(x.qFlux,3)}</td>
-      <td>${fmt(x.lambdaTec,4)}</td>
-      <td>${fmt(x.lambdaFlux,4)}</td>
-      <td>${x.deviceId ?? ''}</td>
-    </tr>`).join('');
+    <td>${isoLocal(x.createdAt)}</td>
+    <td>${fmt(x.t1)}</td>
+    <td>${fmt(x.t2)}</td>
+    <td>${fmt(x.deltaT)}</td>
+    <td>${fmt(x.tecMv,3)}</td>
+    <td>${fmt(x.fluxMv,3)}</td>
+    <td>${fmt(x.qTec,3)}</td>
+    <td>${fmt(x.qFlux,3)}</td>
+    <td>${fmt(x.lambdaTec,4)}</td>
+    <td>${fmt(x.lambdaFlux,4)}</td>
+    <td>${x.deviceId ?? ''}</td>
+  </tr>`).join('');
 
     filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
     filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
@@ -281,6 +304,33 @@
     filteredChart.update();
   }
 
+  function exportTableToExcel() {
+    const table = document.getElementById('dataTable');
+    const workbook = XLSX.utils.table_to_book(table, { sheet: "FluxEngine" });
+    XLSX.writeFile(workbook, "fluxengine-data.xlsx");
+  }
+
+  function exportChartToJpeg(chart, filename) {
+    const link = document.createElement('a');
+    link.href = chart.toBase64Image('image/jpeg', 1.0);
+    link.download = filename;
+    link.click();
+  }
+
+  function exportChartToPdf(chartCanvasId, filename) {
+    const canvas = document.getElementById(chartCanvasId);
+    const image = canvas.toDataURL('image/jpeg', 1.0);
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('landscape', 'mm', 'a4');
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    pdf.addImage(image, 'JPEG', 10, 20, pageWidth - 20, pageHeight - 40);
+    pdf.save(filename);
+  }
+
   filterForm.addEventListener('submit', e => {
     e.preventDefault();
     loadFiltered();
@@ -289,6 +339,24 @@
   resetBtn.addEventListener('click', () => {
     filterForm.reset();
     loadFiltered();
+  });
+
+  exportExcelBtn.addEventListener('click', exportTableToExcel);
+
+  exportLiveJpegBtn.addEventListener('click', () => {
+    exportChartToJpeg(liveChart, 'fluxengine-live-chart.jpeg');
+  });
+
+  exportLivePdfBtn.addEventListener('click', () => {
+    exportChartToPdf('liveChart', 'fluxengine-live-chart.pdf');
+  });
+
+  exportFilteredJpegBtn.addEventListener('click', () => {
+    exportChartToJpeg(filteredChart, 'fluxengine-filtered-chart.jpeg');
+  });
+
+  exportFilteredPdfBtn.addEventListener('click', () => {
+    exportChartToPdf('filteredChart', 'fluxengine-filtered-chart.pdf');
   });
 
   loadSettings();
