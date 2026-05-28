@@ -111,6 +111,16 @@
       </div>
 
       <div>
+        <span>Середній qTEC</span>
+        <strong id="avgQTec">—</strong>
+      </div>
+
+      <div>
+        <span>Середній qFlux</span>
+        <strong id="avgQFlux">—</strong>
+      </div>
+
+      <div>
         <span>Кількість точок</span>
         <strong id="summaryCount">—</strong>
       </div>
@@ -162,19 +172,22 @@
 </main>
 
 <script>
-  const fmt = (v, d = 2) => v == null ? '—' : Number(v).toFixed(d);
+  const fmt = (v, d = 2) => v == null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(d);
   const isoLocal = v => v ? new Date(v).toLocaleString() : '—';
   const toIsoParam = v => v ? new Date(v).toISOString().replace('Z','') : '';
+
+  let currentSettings = {};
 
   function dataset(label) {
     return {
       label,
       data: [],
       pointRadius: 4,
-      pointHoverRadius: 6,
+      pointHoverRadius: 7,
       pointBackgroundColor: '#ffffff',
       pointBorderWidth: 2,
-      tension: 0.25
+      borderWidth: 2,
+      tension: 0.2
     };
   }
 
@@ -182,13 +195,16 @@
     return {
       responsive: true,
       animation: false,
+      maintainAspectRatio: true,
+      devicePixelRatio: 2,
       plugins: {
         legend: {
           labels: {
             color: '#0f172a',
             usePointStyle: true,
-            boxWidth: 10,
-            padding: 14
+            boxWidth: 12,
+            padding: 16,
+            font: { size: 12, weight: '600' }
           },
           onClick: (e, legendItem, legend) => {
             const index = legendItem.datasetIndex;
@@ -203,13 +219,14 @@
           ticks: {
             color: '#334155',
             maxRotation: 45,
-            minRotation: 45
+            minRotation: 45,
+            font: { size: 11 }
           },
           grid: { color: '#e5e7eb' }
         },
         y: {
           beginAtZero: showYAxisFromZero,
-          ticks: { color: '#334155' },
+          ticks: { color: '#334155', font: { size: 11 } },
           grid: { color: '#e5e7eb' }
         }
       }
@@ -254,11 +271,15 @@
   async function loadSettings() {
     const res = await fetch('/api/settings');
     const s = await res.json();
+    currentSettings = s;
 
     materialName.innerText = s.materialName ?? '—';
     thicknessM.innerText = fmt(s.thicknessM, 4);
     kTec.innerText = fmt(s.KTec ?? s.kTec ?? s.ktec, 4);
     kFlux.innerText = fmt(s.KFlux ?? s.kFlux ?? s.kflux, 4);
+
+    summaryMaterial.innerText = s.materialName ?? '—';
+    summaryThickness.innerText = s.thicknessM == null ? '—' : `${fmt(s.thicknessM, 4)} м`;
 
     t1Label.innerText = s.t1Name ?? 'T1';
     t2Label.innerText = s.t2Name ?? 'T2';
@@ -312,24 +333,49 @@
     return params.toString();
   }
 
+  function calculateAverage(values) {
+    const valid = values
+            .filter(v => v !== null && v !== undefined && !Number.isNaN(Number(v)))
+            .map(Number);
+
+    if (valid.length === 0) return null;
+    return valid.reduce((a, b) => a + b, 0) / valid.length;
+  }
+
+  function updateSummary(rows) {
+    const avgTec = calculateAverage(rows.map(x => x.lambdaTec));
+    const avgFlux = calculateAverage(rows.map(x => x.lambdaFlux));
+    const avgQT = calculateAverage(rows.map(x => x.qTec));
+    const avgQF = calculateAverage(rows.map(x => x.qFlux));
+
+    summaryMaterial.innerText = currentSettings.materialName ?? '—';
+    summaryThickness.innerText = currentSettings.thicknessM == null ? '—' : `${fmt(currentSettings.thicknessM, 4)} м`;
+
+    avgLambdaTec.innerText = avgTec === null ? '—' : avgTec.toFixed(5) + ' Вт/(м·К)';
+    avgLambdaFlux.innerText = avgFlux === null ? '—' : avgFlux.toFixed(5) + ' Вт/(м·К)';
+    avgQTec.innerText = avgQT === null ? '—' : avgQT.toFixed(3) + ' Вт/м²';
+    avgQFlux.innerText = avgQF === null ? '—' : avgQF.toFixed(3) + ' Вт/м²';
+    summaryCount.innerText = rows.length;
+  }
+
   async function loadFiltered() {
     const res = await fetch('/api/measurements/search?' + buildQuery());
     const page = await res.json();
     const rows = page.content.reverse();
 
     tableBody.innerHTML = rows.map(x => `<tr>
-    <td>${isoLocal(x.createdAt)}</td>
-    <td>${fmt(x.t1)}</td>
-    <td>${fmt(x.t2)}</td>
-    <td>${fmt(x.deltaT)}</td>
-    <td>${fmt(x.tecMv,3)}</td>
-    <td>${fmt(x.fluxMv,3)}</td>
-    <td>${fmt(x.qTec,3)}</td>
-    <td>${fmt(x.qFlux,3)}</td>
-    <td>${fmt(x.lambdaTec,4)}</td>
-    <td>${fmt(x.lambdaFlux,4)}</td>
-    <td>${x.deviceId ?? ''}</td>
-  </tr>`).join('');
+      <td>${isoLocal(x.createdAt)}</td>
+      <td>${fmt(x.t1)}</td>
+      <td>${fmt(x.t2)}</td>
+      <td>${fmt(x.deltaT)}</td>
+      <td>${fmt(x.tecMv,3)}</td>
+      <td>${fmt(x.fluxMv,3)}</td>
+      <td>${fmt(x.qTec,3)}</td>
+      <td>${fmt(x.qFlux,3)}</td>
+      <td>${fmt(x.lambdaTec,4)}</td>
+      <td>${fmt(x.lambdaFlux,4)}</td>
+      <td>${x.deviceId ?? ''}</td>
+    </tr>`).join('');
 
     filteredChart.data.labels = rows.map(x => new Date(x.createdAt).toLocaleTimeString());
     filteredChart.data.datasets[0].data = rows.map(x => x.qTec);
@@ -338,25 +384,7 @@
     filteredChart.data.datasets[3].data = rows.map(x => x.lambdaFlux);
 
     filteredChart.update();
-  }
-
-  function calculateAverage(values) {
-    const valid = values
-            .filter(v => v !== null && v !== undefined && !Number.isNaN(Number(v)))
-            .map(Number);
-
-    if (valid.length === 0) return null;
-
-    return valid.reduce((a, b) => a + b, 0) / valid.length;
-  }
-
-  function updateSummary(rows) {
-    const avgTec = calculateAverage(rows.map(x => x.lambdaTec));
-    const avgFlux = calculateAverage(rows.map(x => x.lambdaFlux));
-
-    avgLambdaTec.innerText = avgTec === null ? '—' : avgTec.toFixed(5) + ' Вт/(м·К)';
-    avgLambdaFlux.innerText = avgFlux === null ? '—' : avgFlux.toFixed(5) + ' Вт/(м·К)';
-    summaryCount.innerText = rows.length;
+    updateSummary(rows);
   }
 
   function exportTableToExcel() {
@@ -365,42 +393,119 @@
     XLSX.writeFile(workbook, "fluxengine-data.xlsx");
   }
 
-  function exportChartToJpeg(chart, filename) {
-    const sourceCanvas = chart.canvas;
-
-    const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = 2400;
-    exportCanvas.height = 1200;
-
-    const ctx = exportCanvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-    ctx.drawImage(sourceCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
-
-    const link = document.createElement('a');
-    link.href = exportCanvas.toDataURL('image/jpeg', 1.0);
-    link.download = filename;
-    link.click();
+  function getVisibleDatasetIndexes(chart) {
+    return chart.data.datasets
+            .map((_, index) => chart.isDatasetVisible(index) ? index : null)
+            .filter(index => index !== null);
   }
 
-  function exportChartToPdf(chartCanvasId, filename) {
-    const sourceCanvas = document.getElementById(chartCanvasId);
+  function buildExportConfig(chart) {
+    const visibleIndexes = getVisibleDatasetIndexes(chart);
 
+    return {
+      type: chart.config.type,
+      data: {
+        labels: [...chart.data.labels],
+        datasets: visibleIndexes.map(index => ({
+          ...chart.data.datasets[index],
+          data: [...chart.data.datasets[index].data],
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointBackgroundColor: '#ffffff',
+          pointBorderWidth: 2,
+          borderWidth: 3,
+          tension: 0.2
+        }))
+      },
+      options: {
+        responsive: false,
+        animation: false,
+        devicePixelRatio: 1,
+        plugins: {
+          legend: {
+            labels: {
+              color: '#0f172a',
+              usePointStyle: true,
+              boxWidth: 14,
+              padding: 18,
+              font: { size: 18, weight: '600' }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#334155',
+              font: { size: 14 },
+              maxRotation: 45,
+              minRotation: 45
+            },
+            grid: { color: '#e5e7eb' }
+          },
+          y: {
+            ticks: { color: '#334155', font: { size: 14 } },
+            grid: { color: '#e5e7eb' }
+          }
+        }
+      }
+    };
+  }
+
+  function renderChartForExport(chart, width = 3200, height = 1800) {
     const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = 2400;
-    exportCanvas.height = 1200;
+    exportCanvas.width = width;
+    exportCanvas.height = height;
 
     const ctx = exportCanvas.getContext('2d');
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-    ctx.drawImage(sourceCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+    ctx.fillRect(0, 0, width, height);
 
-    const image = exportCanvas.toDataURL('image/jpeg', 1.0);
+    const exportChart = new Chart(ctx, buildExportConfig(chart));
+    exportChart.resize(width, height);
+    exportChart.update();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+
+    const result = exportCanvas.toDataURL('image/png', 1.0);
+    exportChart.destroy();
+
+    return result;
+  }
+
+  function exportChartToJpeg(chart, filename) {
+    const pngData = renderChartForExport(chart, 3200, 1800);
+
+    const img = new Image();
+    img.onload = () => {
+      const jpegCanvas = document.createElement('canvas');
+      jpegCanvas.width = 3200;
+      jpegCanvas.height = 1800;
+
+      const ctx = jpegCanvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, jpegCanvas.width, jpegCanvas.height);
+      ctx.drawImage(img, 0, 0);
+
+      const link = document.createElement('a');
+      link.href = jpegCanvas.toDataURL('image/jpeg', 1.0);
+      link.download = filename;
+      link.click();
+    };
+
+    img.src = pngData;
+  }
+
+  function exportChartToPdf(chart, filename) {
+    const image = renderChartForExport(chart, 3200, 1800);
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('landscape', 'mm', 'a4');
 
-    pdf.addImage(image, 'JPEG', 10, 15, 277, 135);
+    pdf.addImage(image, 'PNG', 10, 12, 277, 156);
     pdf.save(filename);
   }
 
@@ -421,7 +526,7 @@
   });
 
   exportLivePdfBtn.addEventListener('click', () => {
-    exportChartToPdf('liveChart', 'fluxengine-live-chart.pdf');
+    exportChartToPdf(liveChart, 'fluxengine-live-chart.pdf');
   });
 
   exportFilteredJpegBtn.addEventListener('click', () => {
@@ -429,12 +534,13 @@
   });
 
   exportFilteredPdfBtn.addEventListener('click', () => {
-    exportChartToPdf('filteredChart', 'fluxengine-filtered-chart.pdf');
+    exportChartToPdf(filteredChart, 'fluxengine-filtered-chart.pdf');
   });
 
-  loadSettings();
-  loadLatest();
-  loadFiltered();
+  loadSettings().then(() => {
+    loadLatest();
+    loadFiltered();
+  });
 
   setInterval(loadLatest, 5000);
 </script>
