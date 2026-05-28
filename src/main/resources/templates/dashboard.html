@@ -53,9 +53,7 @@
 
   <section class="panel">
     <h2>Онлайн-графік</h2>
-    <p class="hint">
-      Натискайте на назви серій у легенді графіка, щоб приховати або повернути окремі криві.
-    </p>
+    <p class="hint">Натискайте на назви серій у легенді графіка, щоб приховати або повернути окремі криві.</p>
 
     <div class="export-actions">
       <button type="button" id="exportLiveJpegBtn">Live графік JPEG</button>
@@ -88,12 +86,41 @@
     </form>
   </section>
 
+  <section class="panel summary-panel">
+    <h2>Підсумок за вибраний період</h2>
+
+    <div class="summary-grid">
+      <div>
+        <span>Матеріал</span>
+        <strong id="summaryMaterial">—</strong>
+      </div>
+
+      <div>
+        <span>Товщина δ</span>
+        <strong id="summaryThickness">—</strong>
+      </div>
+
+      <div>
+        <span>Середня λTEC</span>
+        <strong id="avgLambdaTec">—</strong>
+      </div>
+
+      <div>
+        <span>Середня λFlux</span>
+        <strong id="avgLambdaFlux">—</strong>
+      </div>
+
+      <div>
+        <span>Кількість точок</span>
+        <strong id="summaryCount">—</strong>
+      </div>
+    </div>
+  </section>
+
   <section class="panel grid2">
     <div>
       <h2>Графік за фільтром</h2>
-      <p class="hint">
-        Серії можна приховувати або повертати натисканням на легенду.
-      </p>
+      <p class="hint">Серії можна приховувати або повертати натисканням на легенду.</p>
 
       <div class="export-actions">
         <button type="button" id="exportFilteredJpegBtn">Фільтр-графік JPEG</button>
@@ -151,6 +178,44 @@
     };
   }
 
+  function chartOptions(showYAxisFromZero = false) {
+    return {
+      responsive: true,
+      animation: false,
+      plugins: {
+        legend: {
+          labels: {
+            color: '#0f172a',
+            usePointStyle: true,
+            boxWidth: 10,
+            padding: 14
+          },
+          onClick: (e, legendItem, legend) => {
+            const index = legendItem.datasetIndex;
+            const chart = legend.chart;
+            chart.setDatasetVisibility(index, !chart.isDatasetVisible(index));
+            chart.update();
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#334155',
+            maxRotation: 45,
+            minRotation: 45
+          },
+          grid: { color: '#e5e7eb' }
+        },
+        y: {
+          beginAtZero: showYAxisFromZero,
+          ticks: { color: '#334155' },
+          grid: { color: '#e5e7eb' }
+        }
+      }
+    };
+  }
+
   const liveChart = new Chart(document.getElementById('liveChart'), {
     type: 'line',
     data: {
@@ -164,23 +229,7 @@
         dataset('λFlux')
       ]
     },
-    options: {
-      responsive: true,
-      animation: false,
-      plugins: {
-        legend: {
-          onClick: (e, legendItem, legend) => {
-            const index = legendItem.datasetIndex;
-            const chart = legend.chart;
-            chart.setDatasetVisibility(index, !chart.isDatasetVisible(index));
-            chart.update();
-          }
-        }
-      },
-      scales: {
-        y: { beginAtZero: false }
-      }
-    }
+    options: chartOptions(false)
   });
 
   const filteredChart = new Chart(document.getElementById('filteredChart'), {
@@ -194,20 +243,7 @@
         dataset('λFlux')
       ]
     },
-    options: {
-      responsive: true,
-      animation: false,
-      plugins: {
-        legend: {
-          onClick: (e, legendItem, legend) => {
-            const index = legendItem.datasetIndex;
-            const chart = legend.chart;
-            chart.setDatasetVisibility(index, !chart.isDatasetVisible(index));
-            chart.update();
-          }
-        }
-      }
-    }
+    options: chartOptions(false)
   });
 
   function setStatus(ok) {
@@ -304,6 +340,25 @@
     filteredChart.update();
   }
 
+  function calculateAverage(values) {
+    const valid = values
+            .filter(v => v !== null && v !== undefined && !Number.isNaN(Number(v)))
+            .map(Number);
+
+    if (valid.length === 0) return null;
+
+    return valid.reduce((a, b) => a + b, 0) / valid.length;
+  }
+
+  function updateSummary(rows) {
+    const avgTec = calculateAverage(rows.map(x => x.lambdaTec));
+    const avgFlux = calculateAverage(rows.map(x => x.lambdaFlux));
+
+    avgLambdaTec.innerText = avgTec === null ? '—' : avgTec.toFixed(5) + ' Вт/(м·К)';
+    avgLambdaFlux.innerText = avgFlux === null ? '—' : avgFlux.toFixed(5) + ' Вт/(м·К)';
+    summaryCount.innerText = rows.length;
+  }
+
   function exportTableToExcel() {
     const table = document.getElementById('dataTable');
     const workbook = XLSX.utils.table_to_book(table, { sheet: "FluxEngine" });
@@ -311,23 +366,41 @@
   }
 
   function exportChartToJpeg(chart, filename) {
+    const sourceCanvas = chart.canvas;
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = 2400;
+    exportCanvas.height = 1200;
+
+    const ctx = exportCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    ctx.drawImage(sourceCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
     const link = document.createElement('a');
-    link.href = chart.toBase64Image('image/jpeg', 1.0);
+    link.href = exportCanvas.toDataURL('image/jpeg', 1.0);
     link.download = filename;
     link.click();
   }
 
   function exportChartToPdf(chartCanvasId, filename) {
-    const canvas = document.getElementById(chartCanvasId);
-    const image = canvas.toDataURL('image/jpeg', 1.0);
+    const sourceCanvas = document.getElementById(chartCanvasId);
+
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = 2400;
+    exportCanvas.height = 1200;
+
+    const ctx = exportCanvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    ctx.drawImage(sourceCanvas, 0, 0, exportCanvas.width, exportCanvas.height);
+
+    const image = exportCanvas.toDataURL('image/jpeg', 1.0);
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('landscape', 'mm', 'a4');
 
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-
-    pdf.addImage(image, 'JPEG', 10, 20, pageWidth - 20, pageHeight - 40);
+    pdf.addImage(image, 'JPEG', 10, 15, 277, 135);
     pdf.save(filename);
   }
 
