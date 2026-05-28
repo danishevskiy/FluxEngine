@@ -173,13 +173,13 @@
 
   const liveChart = new Chart(document.getElementById('liveChart'), {
     type: 'line',
-    data: { labels: [], datasets: [dataset('T1, °C'), dataset('T2, °C'), dataset('qTEC, W/m²'), dataset('qFlux, W/m²'), dataset('λTEC'), dataset('λFlux')] },
+    data: { labels: [], datasets: [dataset('T1, °C'), dataset('T2, °C'), dataset('qTEC, Вт/м²'), dataset('qFlux, Вт/м²'), dataset('λTEC'), dataset('λFlux')] },
     options: chartOptions(false)
   });
 
   const filteredChart = new Chart(document.getElementById('filteredChart'), {
     type: 'line',
-    data: { labels: [], datasets: [dataset('qTEC, W/m²'), dataset('qFlux, W/m²'), dataset('λTEC'), dataset('λFlux')] },
+    data: { labels: [], datasets: [dataset('qTEC, Вт/м²'), dataset('qFlux, Вт/м²'), dataset('λTEC'), dataset('λFlux')] },
     options: chartOptions(false)
   });
 

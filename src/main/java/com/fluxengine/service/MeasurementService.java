@@ -137,11 +137,11 @@ public class MeasurementService {
                     cb.lessThanOrEqualTo(root.get("qTec"), maxQ)));
             return cb.and(predicates.toArray(new Predicate[0]));
         };
-        return repository.findAll(spec, PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 500), Sort.by(Sort.Direction.DESC, "createdAt")));
+        return repository.findAll(spec, PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 10000), Sort.by(Sort.Direction.DESC, "createdAt")));
     }
 
     public List<Measurement> latest(int limit) {
-        return repository.findAll(PageRequest.of(0, Math.min(Math.max(limit, 1), 500), Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
+        return repository.findAll(PageRequest.of(0, Math.min(Math.max(limit, 1), 10000), Sort.by(Sort.Direction.DESC, "createdAt"))).getContent();
     }
 
     public List<Measurement> all(int limit) {

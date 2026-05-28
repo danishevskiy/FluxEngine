@@ -48,7 +48,7 @@ public class MeasurementApiController {
             @RequestParam(required = false) Double minQ,
             @RequestParam(required = false) Double maxQ,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "100") int size) {
+            @RequestParam(defaultValue = "10000") int size) {
         return service.search(from, to, deviceId, minLambda, maxLambda, minQ, maxQ, page, size)
                 .map(MeasurementResponse::from);
     }
