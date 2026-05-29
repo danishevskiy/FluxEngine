@@ -18,7 +18,8 @@
       FluxEngine Admin
     </a>
 
-    <div class="ms-auto">
+    <div class="ms-auto d-flex gap-2">
+      <a href="/api/settings/runtime" class="btn btn-outline-secondary btn-sm" target="_blank">Runtime API</a>
       <a href="/dashboard" class="btn btn-outline-primary btn-sm">Dashboard</a>
     </div>
   </div>
@@ -26,16 +27,72 @@
 
 <main class="container py-4">
 
-  <div class="card shadow-sm border-0">
-    <div class="card-body p-4">
+  <div th:if="${param.saved}" class="alert alert-success shadow-sm border-0">
+    Налаштування збережено. ESP32 застосує їх під час наступного запиту до сервера.
+  </div>
 
-      <h4 class="mb-2">Параметри експерименту</h4>
-      <p class="text-muted mb-4">
-        ESP32 передає сирі значення: <code>t1</code>, <code>t2</code>, <code>tec</code>, <code>flux</code>.
-        Сервер розраховує q, ΔT та λ за заданими коефіцієнтами.
-      </p>
+  <form method="post" th:action="@{/admin/settings}" th:object="${settings}">
 
-      <form method="post" th:action="@{/admin/settings}" th:object="${settings}">
+    <div class="card shadow-sm border-0 mb-4">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between flex-wrap gap-3 align-items-start">
+          <div>
+            <h4 class="mb-2">Керування вимірюваннями ESP32</h4>
+            <p class="text-muted mb-0">
+              Ці параметри читаються ESP32 через <code>/api/settings/runtime</code>. Перепрошивка не потрібна.
+            </p>
+          </div>
+
+          <div class="text-end">
+            <span class="badge fs-6"
+                  th:classappend="${settings.measurementEnabled} ? ' text-bg-success' : ' text-bg-danger'"
+                  th:text="${settings.measurementEnabled} ? 'Вимірювання увімкнені' : 'Вимірювання зупинені'">
+              Status
+            </span>
+          </div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label">Device ID</label>
+            <input type="text" class="form-control" th:field="*{deviceId}">
+            <div class="form-text">Наприклад: <code>esp32-01</code></div>
+          </div>
+
+          <div class="col-md-3">
+            <label class="form-label">Період вимірювання, секунд</label>
+            <input type="number" min="2" max="86400" step="1" class="form-control" th:field="*{intervalSec}">
+            <div class="form-text">Мінімум 2 с. Практично рекомендовано 10–300 с.</div>
+          </div>
+
+          <div class="col-md-3">
+            <div class="form-check form-switch mt-4">
+              <input class="form-check-input" type="checkbox" role="switch" th:field="*{measurementEnabled}">
+              <label class="form-check-label fw-semibold" th:for="${#ids.prev('measurementEnabled')}">
+                Запуск вимірювань
+              </label>
+            </div>
+            <div class="form-text">Зніми прапорець, щоб ESP32 перестав надсилати виміри.</div>
+          </div>
+
+          <div class="col-md-3">
+            <button type="submit" class="btn btn-primary w-100">
+              Застосувати керування
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+      <div class="card-body p-4">
+
+        <h4 class="mb-2">Параметри експерименту</h4>
+        <p class="text-muted mb-4">
+          ESP32 передає сирі значення температур та напруги датчиків. Сервер розраховує q, ΔT та λ за заданими коефіцієнтами.
+        </p>
 
         <div class="row g-3">
 
@@ -46,7 +103,7 @@
 
           <div class="col-md-2">
             <label class="form-label">Товщина δ, м</label>
-            <input type="number" step="0.0001" class="form-control" th:field="*{thicknessM}">
+            <input type="number" step="0.0001" min="0.001" class="form-control" th:field="*{thicknessM}">
           </div>
 
           <div class="col-md-3">
@@ -91,9 +148,9 @@
 
         <hr class="my-4">
 
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
           <button type="submit" class="btn btn-primary">
-            Зберегти параметри
+            Зберегти всі параметри
           </button>
 
           <a href="/dashboard" class="btn btn-outline-secondary">
@@ -101,10 +158,10 @@
           </a>
         </div>
 
-      </form>
-
+      </div>
     </div>
-  </div>
+
+  </form>
 
 </main>
 
