@@ -43,6 +43,11 @@
   <nav class="nav-buttons">
     <a href="/dashboard" class="nav-btn">Dashboard</a>
     <a href="/admin/settings" class="nav-btn primary">Admin</a>
+    <a href="/admin/users" class="nav-btn">Users</a>
+    <form th:action="@{/logout}" method="post" style="display:inline">
+      <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+      <button type="submit" class="nav-btn" style="border:0;cursor:pointer">Вийти</button>
+    </form>
   </nav>
 
   <div class="status">

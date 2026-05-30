@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="uk" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FluxEngine Registration</title>
+  <link rel="icon" href="/img/fluxengine-icon.png" type="image/png">
+  <style>
+    :root{font-family:Inter,system-ui,Arial,sans-serif;color:#172033;background:#f6f7fb}
+    body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,#eef2ff,#f8fafc)}
+    .card{width:100%;max-width:460px;background:#fff;border:1px solid #e8eaf0;border-radius:24px;box-shadow:0 18px 50px #0f172a20;padding:32px}
+    .brand{display:flex;align-items:center;gap:14px;margin-bottom:24px}.brand img{width:52px;height:52px}.brand h1{font-size:26px;margin:0}.brand p{margin:4px 0 0;color:#64748b}
+    label{display:block;font-weight:700;margin:16px 0 8px}input{width:100%;box-sizing:border-box;border:1px solid #dbe2ea;border-radius:14px;padding:13px 14px;font-size:16px;outline:none}
+    input:focus{border-color:#2563eb;box-shadow:0 0 0 4px #2563eb18}button{width:100%;border:0;border-radius:14px;padding:13px 16px;background:#2563eb;color:white;font-weight:800;font-size:16px;cursor:pointer;margin-top:18px}
+    .alert{border-radius:14px;padding:12px 14px;margin:12px 0;font-weight:700}.bad{background:#fee2e2;color:#991b1b}.ok{background:#dcfce7;color:#166534}.hint{margin-top:18px;color:#64748b;font-size:14px;line-height:1.45}a{color:#2563eb;font-weight:700;text-decoration:none}
+  </style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">
+    <img src="/img/fluxengine-icon.png" alt="FluxEngine">
+    <div><h1>FluxEngine</h1><p>Реєстрація користувача</p></div>
+  </div>
+
+  <div th:if="${error}" class="alert bad" th:text="${error}"></div>
+  <div th:if="${success}" class="alert ok" th:text="${success}"></div>
+
+  <form th:action="@{/register}" method="post">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+    <label for="username">Логін</label>
+    <input id="username" name="username" type="text" minlength="3" required autofocus>
+
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required>
+
+    <label for="password">Пароль</label>
+    <input id="password" name="password" type="password" minlength="6" required>
+
+    <button type="submit">Зареєструватися</button>
+  </form>
+
+  <p class="hint">Після реєстрації потрібно підтвердити email. <a href="/login">Повернутися до входу</a></p>
+</main>
+</body>
+</html>
